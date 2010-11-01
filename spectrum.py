@@ -1,6 +1,9 @@
+#!/usr/bin/env python
+
 import numpy as np
-from fileIO import load_rect_array
-from scipy.fftpack import diff
+# from fileIO import load_rect_array
+
+import os
 
 def _is_cplx(arr):
     return arr.dtype.char in ('F', 'D', 'G')
@@ -31,6 +34,10 @@ def dealias(carr, dls_fac=1./3.):
     carr[mask] = 0.0+0.0j
 
 def get_k_idxs(nx,ny):
+    """
+    the X direction is symmetric, the Y direction is asymmetric.
+    """
+    assert nx > ny
     kyidx = np.arange(0., ny)
     kxidx = np.arange(0.,nx)-nx/2
     kxidx[0] = -kxidx[0]
@@ -38,8 +45,11 @@ def get_k_idxs(nx,ny):
     kxidx = kxidx[:,np.newaxis]
     return kxidx, kyidx
 
-@fft_dec
+# @fft_dec
 def mult_by_k(carr, k_power):
+    """
+    the X direction is symmetric, the Y direction is asymmetric.
+    """
     kxidx, kyidx = get_k_idxs(*carr.shape)
     kdist = np.sqrt(kxidx**2 + kyidx**2)
     return carr * kdist**k_power
@@ -60,26 +70,6 @@ def cderivative(carr, direction, order=1):
     karr = (1.0j * karr)**order
 
     return karr * carr
-
-def partial(rarr, direction, order=1, period=None):
-    if direction == 'Y_DIR':
-        rarr = rarr.T.copy()
-    ret = [diff(row, order=order, period=period) for row in rarr]
-    ret = np.vstack(ret)
-    if direction == 'Y_DIR':
-        ret = ret.T.copy()
-    return ret
-
-def hessian(f):
-    fx = partial(f, 'X_DIR')
-    fyx = partial(fx, 'Y_DIR')
-    fxx = partial(f, 'X_DIR', 2)
-    fyy = partial(f, 'Y_DIR', 2)
-    # fx = cderivative(f, 'X_DIR').copy()
-    # fyx = cderivative(fx, 'Y_DIR').copy()
-    # fxx = cderivative(f, 'X_DIR', 2).copy()
-    # fyy = cderivative(f, 'Y_DIR', 2).copy()
-    return (fxx * fyy - fyx**2)
 
 def irfft2(carr):
     nx, ny = carr.shape
@@ -121,11 +111,64 @@ def get_spectrum(carr, npoints):
     for i in xrange(nx*ny):
         fl_idx = floor_arr[i]
         ceil_idx = ceil_arr[i]
-        val = abs_carr
         spec[fl_idx] += left_side[i]
         spec[ceil_idx] += right_side[i]
 
     return x_interp_points, spec
+
+def spectra_plot(cpsi, cvor, cden, npoints, name, title):
+    import pylab as pl
+    Ebk = mult_by_k(cpsi * np.conj(cpsi), 2)
+    Evk = mult_by_k(cvor * np.conj(cvor), -2)
+    Enk = cden * np.conj(cden)
+
+    x, Bspec = get_spectrum(Ebk, npoints)
+    x, Vspec = get_spectrum(Evk, npoints)
+    x, Nspec = get_spectrum(Enk, npoints)
+
+    pl.figure()
+    pl.loglog(x, Bspec, 'ro-', label='magnetic')
+    pl.loglog(x, Vspec, 'g^-', label='kinetic')
+    pl.loglog(x, Nspec, 'b<-', label='internal')
+    pl.xlabel('wavenumber (norm. units)')
+    pl.ylabel('Spect. amp. (norm. units)')
+    pl.title(title)
+    pl.legend()
+    for ext in ('.eps', '.png'):
+        pl.savefig(name + ext)
+
+def spectra_h5(h5name, directory):
+    import tables
+    from visualization import h5_gen
+    dta = tables.openFile(h5name, mode='r')
+
+    def itr(gen):
+        for x in gen:
+            yield x.data()
+
+    cdens = h5_gen(dta, 'cden')
+    cpsis = h5_gen(dta, 'cpsi')
+    cvors = h5_gen(dta, 'cvor')
+
+    npoints = 256
+
+    from itertools import izip
+
+    try:
+        os.makedirs(directory)
+    except OSError:
+        pass
+
+    for (cpsi, cvor, cden) in izip(cpsis, cvors, cdens):
+        arrs = [cpsi.read(), cvor.read(), cden.read()]
+        for arr in arrs:
+            arr.dtype = np.complex64
+        arrs = [np.transpose(arr) for arr in arrs]
+        name = os.path.join(directory, cpsi.name)
+        assert cpsi.name == cvor.name == cden.name
+        spectra_plot(*arrs, npoints=npoints, name=name, title=name)
+
+    dta.close()
 
 def plot_eng_spectra(cpsi, cvor, cden, npoints):
     import pylab as pl
@@ -147,3 +190,16 @@ def plot_eng_spectra(cpsi, cvor, cden, npoints):
 def load_carrs(index, ndigits=7, basenames=('cpsi', 'cvor', 'cden'), with_records=False):
     fnames = ['%s_%07d' % (bn, index) for bn in basenames]
     return [load_rect_array(fname, with_records=with_records) for fname in fnames]
+
+if __name__ == '__main__':
+    import sys
+    from optparse import OptionParser
+    parser = OptionParser()
+    parser.add_option("-f", "--file", dest="fname",
+                        help="hdf5 data file")
+    opts, args = parser.parse_args()
+    if not opts.fname:
+        parser.print_help()
+        sys.exit(1)
+
+    spectra_h5(opts.fname, 'spectra')

@@ -62,6 +62,17 @@ def main_fs():
         fnames = io.fnamefilter(basename, all_fnames)
         make_images(basename, fnames)
 
+def h5_gen(h5file, gpname):
+    import sys
+    import tables
+    if isinstance(h5file, tables.file.File):
+        dta = h5file
+    elif isinstance(h5file, basestring):
+        dta = tables.openFile(h5file, mode='r')
+    gp = dta.getNode('/%s' % gpname)
+    for arr in gp:
+        yield arr
+
 def main_h5(options, args):
     import sys
     import tables

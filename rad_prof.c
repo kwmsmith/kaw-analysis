@@ -8,18 +8,20 @@
 #include <stdio.h>
 #endif
 
+/* #define M_PI 3.1415926 */
+
 #define IDX(i,j,ny) ((i)*(ny)+(j))
 
 int rad_prof__(const double *arr, /* in */
-              const size_t nx, /* in */
-              const size_t ny, /* in */
-              const double scale, /* in */
-              const double center_x, /* in */
-              const double center_y, /* in */
-              const double max_rad, /* in */
-              double *profile, /* out */
-              const size_t nprofile /* in */
-              )
+               const size_t nx, /* in */
+               const size_t ny, /* in */
+               const double scale, /* in */
+               const double center_x, /* in */
+               const double center_y, /* in */
+               const double max_rad, /* in */
+               double *profile, /* out */
+               const size_t nprofile /* in */
+               )
 {
     size_t i, j;
     double delta_x, delta_y, i_scl, j_scl;
@@ -98,8 +100,12 @@ int rad_prof__(const double *arr, /* in */
             }
         }
         for(i=0; i<nprofile; i++) {
-            if(normsum[i])
-                profile[i] /= normsum[i];
+            printf("profile[%zd] / (2 pi): %f (0.5 * normsum[%zd]): %f\n", i, profile[i] / (2.0 * M_PI * (i==0 ? 1: i)),
+                    i, 0.5 * normsum[i] / (2.0 * M_PI * (i==0 ? 1 : i)));
+
+            profile[i] /= (2.0 * M_PI * (i==0 ? 1 : i));
+            /* if(normsum[i]) */
+                /* profile[i] /= 0.5 * normsum[i]; */
         }
         if(normsum)
             free(normsum);

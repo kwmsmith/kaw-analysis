@@ -44,6 +44,7 @@ def spectra_plot(cpsi, cvor, cden, rho_s2, npoints, name, title, exts=('.png', '
     Evk = vcalc.mult_by_k(cvor * np.conj(cvor), -2)
     Enk = rho_s2 * (cden * np.conj(cden))
 
+
     x, Bspec = get_spectrum(Ebk, npoints)
     x, Vspec = get_spectrum(Evk, npoints)
     x, Nspec = get_spectrum(Enk, npoints)
@@ -88,6 +89,9 @@ def spectra_h5(h5name, directory):
         for arr in arrs:
             arr.dtype = np.complex64
         arrs = [np.transpose(arr) for arr in arrs]
+        nx = arrs[0].shape[0]
+        czeros = np.zeros((nx,1), dtype=np.complex64)
+        arrs = [np.hstack([arr, czeros]) for arr in arrs]
         name = os.path.join(directory, cpsi.name)
         assert cpsi.name == cvor.name == cden.name
         spectra_plot(*arrs, rho_s2=rho_s2, npoints=npoints, name=name, title=name)

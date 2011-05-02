@@ -4,6 +4,7 @@ from itertools import groupby
 import matplotlib
 matplotlib.use('Agg')
 import pylab as pl
+import tables
 
 def load_scalars(fname):
     dt = np.dtype({'names':('index', 'wall_time', 'basic_steps', 'sim_time', 'be','ve', 'ne', 'msf'),
@@ -11,19 +12,30 @@ def load_scalars(fname):
     scalar_arr = np.loadtxt(fname, dt)
     return scalar_arr
 
-def plot_energy(fname):
-    scalar_arr = load_scalars(fname)
+def load_scalars_h5(fname):
+    dta = tables.openFile(fname)
+    scals = dta.getNode('/scalars')
+    sdta = scals.scalar_data.read()
+    return sdta
+
+def plot_energy(fname, title=None, loader=load_scalars_h5, plotter=pl.semilogy):
+    scalar_arr = loader(fname)
     pl.figure(figsize=(11,8))
-    colors = 'bgk'
-    symbols = 'ov*'
-    for idx, field in enumerate(('be', 'ne', 've')):
-        pl.semilogy(scalar_arr[field], colors[idx]+symbols[idx]+'-', label=field)
+    colors = 'bgkw'
+    symbols = 'ov*^'
+    etot = scalar_arr['be'] + scalar_arr['ne'] + scalar_arr['ve']
+    arr_names = ['be', 'ne', 've']
+    arrs = [scalar_arr[nm] for nm in arr_names]
+    arr_names += ['total']
+    arrs += [etot]
+    for idx, (nm, field) in enumerate(zip(arr_names, arrs)):
+        plotter(scalar_arr['sim_time'], field, colors[idx]+symbols[idx]+'-', label=nm)
     pl.legend()
+    pl.title(title)
     pl.xlabel('Time (arb. units)')
     pl.ylabel('Energy (arb. units)')
 
 def load_stats_h5(fname):
-    import tables
     dta = tables.openFile(fname)
     stats = dta.getNode('/stats')
     all_stats = {}

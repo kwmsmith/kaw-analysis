@@ -19,6 +19,11 @@ def sin_cos_arr(N,m,n):
     X -= N/2; Y -= N/2
     return np.sin(2*m*np.pi*X/N) - np.cos(2*n*np.pi*Y/N)
 
+def sin_cos_prod(N,m,n):
+    X,Y = np.ogrid[0:N, 0:N]
+    X -= N/2; Y -= N/2
+    return np.sin(2*m*np.pi*X/N) * np.cos(2*n*np.pi*Y/N)
+
 def test_mult_by_k1():
     carr = np.zeros((32,16),dtype='F')+1.0+1.0j
     ck0 = vcalc.mult_by_k(carr, 0)

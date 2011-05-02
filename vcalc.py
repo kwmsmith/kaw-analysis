@@ -72,6 +72,11 @@ def cderivative(carr, direction, order=1):
 
     return karr * carr
 
+def gradient(arr):
+    arr_x = cderivative(arr, 'X_DIR')
+    arr_y = cderivative(arr, 'Y_DIR')
+    return arr_x, arr_y
+
 def irfft2(carr):
     nx, ny = carr.shape
     zero_col = np.zeros((nx,1),dtype=carr.dtype)

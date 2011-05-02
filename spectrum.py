@@ -2,7 +2,6 @@
 
 import numpy as np
 import vcalc
-# from fileIO import load_rect_array
 
 import os
 
@@ -39,11 +38,11 @@ def get_spectrum(carr, npoints):
 
     return x_interp_points, spec
 
-def spectra_plot(cpsi, cvor, cden, npoints, name, title):
+def spectra_plot(cpsi, cvor, cden, rho_s2, npoints, name, title, exts=('.png', '.pdf')):
     import pylab as pl
-    Ebk = mult_by_k(cpsi * np.conj(cpsi), 2)
-    Evk = mult_by_k(cvor * np.conj(cvor), -2)
-    Enk = cden * np.conj(cden)
+    Ebk = vcalc.mult_by_k(cpsi * np.conj(cpsi), 2)
+    Evk = vcalc.mult_by_k(cvor * np.conj(cvor), -2)
+    Enk = rho_s2 * (cden * np.conj(cden))
 
     x, Bspec = get_spectrum(Ebk, npoints)
     x, Vspec = get_spectrum(Evk, npoints)
@@ -57,13 +56,15 @@ def spectra_plot(cpsi, cvor, cden, npoints, name, title):
     pl.ylabel('Spect. amp. (norm. units)')
     pl.title(title)
     pl.legend()
-    for ext in ('.eps', '.png'):
+    for ext in exts:
         pl.savefig(name + ext)
 
 def spectra_h5(h5name, directory):
     import tables
     from visualization import h5_gen
     dta = tables.openFile(h5name, mode='r')
+
+    rho_s2 = dta.root.sim_params._v_attrs.RHO_S2
 
     def itr(gen):
         for x in gen:
@@ -89,15 +90,15 @@ def spectra_h5(h5name, directory):
         arrs = [np.transpose(arr) for arr in arrs]
         name = os.path.join(directory, cpsi.name)
         assert cpsi.name == cvor.name == cden.name
-        spectra_plot(*arrs, npoints=npoints, name=name, title=name)
+        spectra_plot(*arrs, rho_s2=rho_s2, npoints=npoints, name=name, title=name)
 
     dta.close()
 
 def plot_eng_spectra(cpsi, cvor, cden, npoints):
     import pylab as pl
     pl.ion()
-    Ebk = mult_by_k(cpsi * np.conj(cpsi), 2)
-    Evk = mult_by_k(cvor * np.conj(cvor), -2)
+    Ebk = vcalc.mult_by_k(cpsi * np.conj(cpsi), 2)
+    Evk = vcalc.mult_by_k(cvor * np.conj(cvor), -2)
     Enk = cden * np.conj(cden)
 
     x,Eb_spect = get_spectrum(Ebk, npoints)

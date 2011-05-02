@@ -81,9 +81,74 @@ def irfft2(carr):
     else:
         assert False
     return np.fft.irfft2(temp_carr)
-    
 
-def get_spectrum(carr, npoints):
+def get_dist_0(N):
+    """
+    returns the wraparound distance from the 0th element.
+
+    >>> get_dist_0(4) == [0, 1, 2, 1]
+    >>> get_dist_0(8) == [0, 1, 2, 3, 4, 3, 2, 1]
+    >>> get_dist_0(7) == [0, 1, 2, 3, 3, 2, 1]
+    """
+    if not N % 2:
+        return range(N/2+1) + range(N/2-1,0,-1)
+    else:
+        Nm1 = N - 1
+        return range(Nm1/2+1) + range(Nm1/2, 0, -1)
+
+def get_spectrum(arr, npoints):
+    return integrate_theta(arr, npoints)
+
+def correct_radius(x, spec, npoints):
+    rad_correction = (2*np.pi*x)/npoints * x[-1] + spec[0]
+    return x, spec/rad_correction
+
+def integrate_theta(arr, npoints):
+    nx, ny = arr.shape
+    if np.iscomplexobj(arr):
+        assert nx != ny
+        arr = np.abs(arr)
+    fl_arr = arr.flatten()
+    if ny == nx/2 + 1:
+        # only works with standard complex array arrangements.
+        x_dist = get_dist_0(nx)
+        y_dist = range(ny)
+    elif nx == ny:
+        # treat both dimensions the same
+        x_dist = get_dist_0(nx)
+        y_dist = get_dist_0(ny)
+    else:
+        raise ValueError("unsupported dimensions in input array, given %r" % (arr.shape,))
+
+    x_dist, y_dist = np.array(x_dist), np.array(y_dist)
+
+    distmax = int(np.ceil(np.sqrt(max(x_dist)**2 + max(y_dist)**2)))
+    delta = float(distmax) / (npoints-1)
+    x_dist = x_dist[:, np.newaxis]
+    dist = np.sqrt(x_dist**2 + y_dist**2).reshape(-1) / delta
+
+    floor_arr = np.array(np.floor(dist), dtype='i')
+    ceil_arr =  np.array(np.ceil(floor_arr + .6), dtype='i')
+
+    floor_arr[floor_arr >= npoints] = npoints - 1
+    ceil_arr[ceil_arr >= npoints]   = npoints - 1
+
+    x_interp_points = np.linspace(0., distmax, npoints)
+
+    spec = np.zeros((npoints,))
+
+    left_side = (ceil_arr - dist) * fl_arr
+    right_side = (dist - floor_arr) * fl_arr
+
+    for i in xrange(nx*ny):
+        fl_idx = floor_arr[i]
+        cl_idx = ceil_arr[i]
+        spec[fl_idx] += left_side[i]
+        spec[cl_idx] += right_side[i]
+
+    return x_interp_points, spec
+
+def _get_spectrum(carr, npoints):
     tmp_carr = np.fft.ifftshift(carr, axes=[0])
     abs_carr = np.abs(tmp_carr).flatten()
     nx, ny = tmp_carr.shape
@@ -121,6 +186,7 @@ def spectra_plot(cpsi, cvor, cden, npoints, name, title):
     Ebk = mult_by_k(cpsi * np.conj(cpsi), 2)
     Evk = mult_by_k(cvor * np.conj(cvor), -2)
     Enk = cden * np.conj(cden)
+
 
     x, Bspec = get_spectrum(Ebk, npoints)
     x, Vspec = get_spectrum(Evk, npoints)
@@ -164,6 +230,9 @@ def spectra_h5(h5name, directory):
         for arr in arrs:
             arr.dtype = np.complex64
         arrs = [np.transpose(arr) for arr in arrs]
+        nx = arrs[0].shape[0]
+        czeros = np.zeros((nx,1), dtype=np.complex64)
+        arrs = [np.hstack([arr, czeros]) for arr in arrs]
         name = os.path.join(directory, cpsi.name)
         assert cpsi.name == cvor.name == cden.name
         spectra_plot(*arrs, npoints=npoints, name=name, title=name)

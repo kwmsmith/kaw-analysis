@@ -1,20 +1,33 @@
-from . import spectrum as spect
+import spectrum as spect
 import numpy as np
 
 from nose.tools import ok_, eq_, set_trace
 
 def test_get_spectrum_zeros():
-    carr = np.zeros((10,5),dtype='F')
+    carr = np.zeros((10,6),dtype='F')
     x,sp = spect.get_spectrum(carr, 5)
 
 def test_get_spectrum_ones():
-    carr = np.zeros((200,100),dtype='F')+1.0j
+    carr = np.zeros((200,101),dtype='F')+1.0j
+    sq_arr = np.ones((200, 200), dtype='f')
     npts = 101
-    x,sp = spect.get_spectrum(carr, npts)
 
-    approx = (np.pi*x)/npts*x[-1] + sp[0]
+    for idx, arr in enumerate((carr, sq_arr)):
+        x,sp = spect.get_spectrum(arr, npts)
+        approx = (np.pi*x)/npts*x[-1] + sp[0]
+        assert np.allclose(sum(sp), sum(abs(arr.flatten())))
+        # import pylab as pl
+        # pl.ion()
+        # pl.plot(x, sp)
+    # pl.savefig('plot.png')
 
-    assert np.allclose(sum(sp), sum(abs(carr.flatten())))
+def test_get_dist_0():
+    eq_([0,1], spect.get_dist_0(2))
+    eq_([0], spect.get_dist_0(1))
+    N = 256
+    eq_(range(N/2+1) + range(N/2-1,0,-1), spect.get_dist_0(N))
+    N = 7
+    eq_([0, 1, 2, 3, 3, 2, 1], spect.get_dist_0(N))
 
 def sin_arr(N,m):
     return _trig_arr(N,m,np.sin)

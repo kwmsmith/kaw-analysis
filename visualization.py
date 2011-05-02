@@ -5,9 +5,9 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import pylab as pl
+from itertools import izip
 # import fileIO as io
 import sys
-from itertools import izip
 import os
 
 IMAGES_DIR = "images"
@@ -55,7 +55,6 @@ def make_images(basename, arr_dict, rescale=True, img_kind=['pdf']):
             imsave(save_name, arr, **kwargs)
 
 def h5_gen(h5file, gpname):
-    import sys
     import tables
     if isinstance(h5file, tables.file.File):
         dta = h5file
@@ -70,17 +69,32 @@ def run_once(fname, field_name):
     import tables
     dta = tables.openFile(fname, mode='r')
     try:
-        gp = dta.getNode('/%s' % field_name)
-        arr_dict = {}
-        for arr in gp:
-            try:
-                arr_dta = arr.read()
-            except tables.exceptions.HDF5ExtError:
-                sys.stderr.write("error in reading array %s in %s, turning off fletcher32" % (arr.name, gp))
-                arr.filters.fletcher32 = False
-                arr_dta = arr.read()
-            arr_dict[arr.name] = arr_dta
-        make_images(field_name, arr_dict, rescale=options.rescale)
+        if field_name.endswith('mag'):
+            field_x = field_name[:-len('mag')] + 'x'
+            field_y = field_name[:-len('mag')] + 'y'
+            arrs_x = dta.walkNodes('/%s' % field_x, classname='Array')
+            arrs_y = dta.walkNodes('/%s' % field_y, classname='Array')
+            arr_dict = {}
+            for arr_x, arr_y in izip(arrs_x, arrs_y):
+                assert arr_x.name == arr_y.name
+                nm = arr_x.name
+                arr_x = arr_x.read()
+                arr_y = arr_y.read()
+                arr_mag = np.sqrt(arr_x**2 + arr_y**2)
+                arr_dict[nm] = arr_mag
+            make_images(field_name, arr_dict, rescale=options.rescale)
+        else:
+            arrs = dta.walkNodes('/%s' % field_name, classname='Array')
+            arr_dict = {}
+            for arr in arrs:
+                try:
+                    arr_dta = arr.read()
+                except tables.exceptions.HDF5ExtError:
+                    sys.stderr.write("error in reading array %s, turning off fletcher32" % arr.name)
+                    arr.filters.fletcher32 = False
+                    arr_dta = arr.read()
+                arr_dict[arr.name] = arr_dta
+            make_images(field_name, arr_dict, rescale=options.rescale)
     finally:
         dta.close()
 

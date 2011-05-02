@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 
+from concurrent import futures
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import pylab as pl
-import fileIO as io
+# import fileIO as io
 import sys
 from itertools import izip
 import os
@@ -31,7 +32,7 @@ def minmax(arrs):
         if mx > gmx: gmx = mx
     return (gmn, gmx)
 
-def make_images(basename, arr_dict, rescale=True, img_kind=["png", "eps"]):
+def make_images(basename, arr_dict, rescale=True, img_kind=['pdf']):
     # to let pylab release memory...
     pl.close('all')
     # will raise exception if <basename>_images already exists
@@ -53,15 +54,6 @@ def make_images(basename, arr_dict, rescale=True, img_kind=["png", "eps"]):
             save_name = os.path.join(dirname,arr_name+"."+knd)
             imsave(save_name, arr, **kwargs)
 
-def main_fs():
-    from glob import glob
-    from sys import argv
-    import os
-    for basename in argv[1:]:
-        all_fnames = os.listdir('.')
-        fnames = io.fnamefilter(basename, all_fnames)
-        make_images(basename, fnames)
-
 def h5_gen(h5file, gpname):
     import sys
     import tables
@@ -73,25 +65,61 @@ def h5_gen(h5file, gpname):
     for arr in gp:
         yield arr
 
-def main_h5(options, args):
+def run_once(fname, field_name):
     import sys
     import tables
-    dta = tables.openFile(options.fname, mode='r')
+    dta = tables.openFile(fname, mode='r')
     try:
-        for field_name in args:
-            gp = dta.getNode('/%s' % field_name)
-            arr_dict = {}
-            for arr in gp:
-                try:
-                    arr_dta = arr.read()
-                except tables.exceptions.HDF5ExtError:
-                    sys.stderr.write("error in reading array %s in %s, turning off fletcher32" % (arr.name, gp))
-                    arr.filters.fletcher32 = False
-                    arr_dta = arr.read()
-                arr_dict[arr.name] = arr_dta
-            make_images(field_name, arr_dict)
+        gp = dta.getNode('/%s' % field_name)
+        arr_dict = {}
+        for arr in gp:
+            try:
+                arr_dta = arr.read()
+            except tables.exceptions.HDF5ExtError:
+                sys.stderr.write("error in reading array %s in %s, turning off fletcher32" % (arr.name, gp))
+                arr.filters.fletcher32 = False
+                arr_dta = arr.read()
+            arr_dict[arr.name] = arr_dta
+        make_images(field_name, arr_dict, rescale=options.rescale)
     finally:
         dta.close()
+
+def main_h5(options, args):
+    field_names = args
+    fnames = [options.fname] * len(field_names)
+    with futures.ProcessPoolExecutor() as executor:
+        for _ in executor.map(run_once, fnames, field_names):
+            pass
+    # import sys
+    # import tables
+    # dta = tables.openFile(options.fname, mode='r')
+    # try:
+        # for field_name in args:
+            # gp = dta.getNode('/%s' % field_name)
+            # arr_dict = {}
+            # for arr in gp:
+                # try:
+                    # arr_dta = arr.read()
+                # except tables.exceptions.HDF5ExtError:
+                    # sys.stderr.write("error in reading array %s in %s, turning off fletcher32" % (arr.name, gp))
+                    # arr.filters.fletcher32 = False
+                    # arr_dta = arr.read()
+                # arr_dict[arr.name] = arr_dta
+            # make_images(field_name, arr_dict, rescale=options.rescale)
+    # finally:
+        # dta.close()
+
+def make_quiver_overlay(background, arr_x, arr_y, title='', skip=8):
+    nx, ny = arr_x.shape
+    if nx != ny:
+        raise ValueError("nx != ny")
+    slicer = slice(0, nx, skip)
+    X,Y = np.ogrid[slicer, slicer]
+    # pl.imshow(background, origin='lower', cmap=pl.cm.hot)
+    pl.imshow(background)
+    pl.colorbar()
+    pl.quiver(X, Y, arr_x[slicer, slicer], arr_y[slicer, slicer])
+    pl.title(title)
 
 if __name__ == '__main__':
     from optparse import OptionParser
@@ -99,6 +127,9 @@ if __name__ == '__main__':
     parser = OptionParser(usage=usage)
     parser.add_option("-f", "--file", dest="fname",
                         help="hdf5 data file")
+    parser.add_option('-r', '--norescale', dest='rescale',
+                        action='store_false', default=True,
+                        help='turn off rescaling')
     options, args = parser.parse_args()
     if not options.fname:
         parser.print_help()
